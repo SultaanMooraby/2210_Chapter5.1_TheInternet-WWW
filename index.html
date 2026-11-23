@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Follow One Click</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a transit map. The top bar is a route line with eight stops; each page is one stop on the journey of a single click. */
+:root{
+  --bg:#EEF1F8; --surface:#FFFFFF; --surface-2:#E3E8F4; --ink:#0F1533; --muted:#4D5578; --line:#C9D0E4;
+  --accent:#2747D8; --accent-ink:#FFFFFF;
+  --good:#127A43; --good-bg:#DDF3E6; --bad:#B4232C; --bad-bg:#FBE1E2;
+  --c-protocol:#C92A3A; --c-domain:#2747D8; --c-file:#3F7D0C; --c-cookie:#B5630A;
+  --c-browser:#6B3FD4; --c-dns:#B8257F; --c-server:#0B7A75;
+  --f-display:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",Verdana,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  --r:14px; --shadow:0 1px 0 rgba(15,21,51,.06),0 8px 24px -12px rgba(15,21,51,.25);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --bg:#0B0F22; --surface:#151B38; --surface-2:#1F2750; --ink:#EEF1FF; --muted:#A9B2D6; --line:#313A66;
+  --accent:#8FA4FF; --accent-ink:#0B0F22;
+  --good:#6FD9A0; --good-bg:#123524; --bad:#FF9AA0; --bad-bg:#3D151A;
+  --c-protocol:#FF8A94; --c-domain:#8FA4FF; --c-file:#A6DB6B; --c-cookie:#F2B25C;
+  --c-browser:#B79CFF; --c-dns:#F58AC9; --c-server:#5FD3CC;
+  --shadow:0 1px 0 rgba(0,0,0,.3),0 10px 28px -14px rgba(0,0,0,.8);
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0B0F22; --surface:#151B38; --surface-2:#1F2750; --ink:#EEF1FF; --muted:#A9B2D6; --line:#313A66;
+  --accent:#8FA4FF; --accent-ink:#0B0F22;
+  --good:#6FD9A0; --good-bg:#123524; --bad:#FF9AA0; --bad-bg:#3D151A;
+  --c-protocol:#FF8A94; --c-domain:#8FA4FF; --c-file:#A6DB6B; --c-cookie:#F2B25C;
+  --c-browser:#B79CFF; --c-dns:#F58AC9; --c-server:#5FD3CC;
+  --shadow:0 1px 0 rgba(0,0,0,.3),0 10px 28px -14px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 17px/1.55 var(--f-body);
+  background-image:radial-gradient(var(--line) 1px,transparent 1px);background-size:22px 22px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:clamp(2.1rem,6vw,3.6rem);font-weight:800}
+h2{font-size:clamp(1.35rem,3.4vw,1.8rem);font-weight:700}
+h3{font-size:1.1rem;font-weight:700}
+p{margin:0}
+a{color:var(--accent)}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
+.mono{font-family:var(--f-mono);overflow-wrap:anywhere}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* route bar */
+.bar{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:2px solid var(--ink)}
+.bar-in{max-width:1080px;margin:0 auto;padding:8px 16px;display:flex;align-items:center;gap:12px}
+.brand{font-family:var(--f-display);font-weight:800;font-size:1.05rem;text-decoration:none;color:var(--ink);white-space:nowrap}
+.brand b{background:var(--ink);color:var(--surface);padding:2px 7px;border-radius:6px;margin-right:6px;font-family:var(--f-mono);font-size:.85rem}
+.route{flex:1;display:flex;gap:0;overflow-x:auto;scrollbar-width:none;padding:4px 2px}
+.route::-webkit-scrollbar{display:none}
+.route a{flex:1 0 auto;min-width:64px;min-height:44px;display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;color:var(--muted);font-size:.72rem;font-weight:700;position:relative;padding:0 6px}
+.route a::before{content:"";position:absolute;top:11px;left:0;right:0;height:4px;background:var(--line)}
+.route a:first-child::before{left:50%}.route a:last-child::before{right:50%}
+.route a i{position:relative;width:26px;height:26px;border-radius:50%;background:var(--surface);border:3px solid var(--line);display:grid;place-items:center;font:700 .72rem var(--f-mono);font-style:normal;color:var(--muted)}
+.route a.done i{background:var(--good);border-color:var(--good);color:var(--surface)}
+.route a.done::before{background:var(--good)}
+.route a[aria-current="page"]{color:var(--ink)}
+.route a[aria-current="page"] i{border-color:var(--ink);background:var(--ink);color:var(--surface);transform:scale(1.12)}
+.icon-btn{min-width:44px;min-height:44px;border:2px solid var(--line);background:var(--surface);border-radius:10px;font-weight:700}
+@media (max-width:640px){.brand span{display:none}}
+
+main{max-width:1080px;margin:0 auto;padding:28px 16px 80px;display:flex;flex-direction:column;gap:28px}
+.phead{display:flex;flex-direction:column;gap:12px;max-width:820px}
+.stop{font:700 .8rem var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.big{font-size:clamp(1.1rem,2.6vw,1.35rem);max-width:60ch;border-left:6px solid var(--accent);padding-left:14px}
+.card{background:var(--surface);border:2px solid var(--ink);border-radius:var(--r);padding:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}
+.card{min-width:0}.card>p,.card li{max-width:68ch;overflow-wrap:anywhere}
+.hint{color:var(--muted);font-size:.95rem}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px}
+.btn{min-height:44px;padding:8px 16px;border-radius:999px;border:2px solid var(--ink);background:var(--surface);font-weight:700;text-decoration:none;color:var(--ink);display:inline-flex;align-items:center;gap:8px;transition:transform .15s}
+.btn:hover{transform:translateY(-2px)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.pill{display:inline-block;padding:2px 10px;border-radius:999px;font:700 .78rem var(--f-mono);border:2px solid currentColor}
+.t-protocol{color:var(--c-protocol)}.t-domain{color:var(--c-domain)}.t-file{color:var(--c-file)}.t-cookie{color:var(--c-cookie)}.t-browser{color:var(--c-browser)}.t-dns{color:var(--c-dns)}.t-server{color:var(--c-server)}
+.exam{border-left:8px solid var(--good)}
+.exam h3::before{content:"✓ ";color:var(--good)}
+.mistake{border-left:8px solid var(--bad)}
+.mistake h3::before{content:"✗ ";color:var(--bad)}
+.exam ul,.card ul,.card ol{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:6px}
+.fb{min-height:1.5em;font-weight:700}
+.fb.ok{color:var(--good)}.fb.no{color:var(--bad)}
+.pn{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+@keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+@keyframes pop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
+.shake{animation:shake .3s}
+.pop{animation:pop .35s}
+
+/* quick check */
+.qc fieldset{border:0;padding:0;margin:0;min-width:0;overflow-wrap:anywhere;display:flex;flex-direction:column;gap:8px}
+.qc legend{font-weight:700;padding:0;max-width:100%;margin-bottom:6px}
+.opt{text-align:left;min-height:44px;padding:8px 14px;border-radius:10px;border:2px solid var(--line);background:var(--surface)}
+.opt:hover{border-color:var(--ink)}
+.opt.right{background:var(--good-bg);border-color:var(--good)}
+.opt.right::after{content:"  ✓ correct";font-weight:700;color:var(--good)}
+.opt.wrong{background:var(--bad-bg);border-color:var(--bad)}
+.opt.wrong::after{content:"  ✗ try again";font-weight:700;color:var(--bad)}
+.complete{background:var(--good-bg);color:var(--good);border:2px solid var(--good);border-radius:10px;padding:10px 14px;font-weight:700}
+
+/* sorter + matcher */
+.pool{display:flex;flex-wrap:wrap;gap:8px;min-height:44px}
+.chip{min-height:44px;padding:8px 12px;border-radius:10px;border:2px solid var(--ink);background:var(--surface);text-align:left;font-size:.95rem}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.bins{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px}
+.bin{border:3px dashed var(--line);border-radius:var(--r);padding:12px;min-height:120px;background:var(--surface-2);display:flex;flex-direction:column;gap:8px;text-align:left;width:100%}
+.bin.ready{border-color:var(--accent);border-style:solid}
+.bin strong{font-family:var(--f-display);font-size:1.1rem}
+.bin span.in{background:var(--surface);border-radius:8px;padding:6px 10px;font-size:.9rem;border-left:5px solid var(--good)}
+.match{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:10px}
+.match>div{display:flex;flex-direction:column;gap:8px}
+.chip.locked{border-color:var(--good);background:var(--good-bg);cursor:default}
+.chip .n{font:700 .8rem var(--f-mono);margin-right:6px}
+
+/* scene */
+.scene{position:relative;aspect-ratio:16/9;min-height:320px;background:var(--surface-2);border-radius:var(--r);border:2px solid var(--ink);overflow:hidden}
+@media (max-width:640px){.scene{aspect-ratio:1/1.15}.node small{display:none}.node{padding:6px}}
+.wires{position:absolute;inset:0;width:100%;height:100%}
+.wires line{stroke:var(--line);stroke-width:5;vector-effect:non-scaling-stroke;stroke-linecap:round}
+.wires line.on{stroke:var(--ink)}
+.node{position:absolute;transform:translate(-50%,-50%);width:clamp(92px,17vw,150px);background:var(--surface);border:3px solid currentColor;border-radius:12px;padding:8px;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;transition:box-shadow .2s,transform .2s}
+.node b{font-family:var(--f-display);font-size:.9rem;color:var(--ink)}
+.node small{font:500 .62rem var(--f-mono);color:var(--muted);overflow-wrap:anywhere;line-height:1.25}
+.node.active{box-shadow:0 0 0 6px color-mix(in srgb,currentColor 25%,transparent);transform:translate(-50%,-50%) scale(1.05)}
+.node svg{width:34px;height:34px}
+.node .ab{width:100%;font:500 .58rem var(--f-mono);background:var(--surface-2);border-radius:5px;padding:2px 4px;color:var(--ink);min-height:1.5em;overflow:hidden;white-space:nowrap}
+.node .scr{width:100%;height:30px;border-radius:5px;background:var(--surface-2);display:grid;place-items:center;font-size:.62rem;color:var(--muted)}
+.node .scr.loaded{background:var(--good-bg);color:var(--good);font-weight:700}
+.node[hidden]{display:none}
+.packet{position:absolute;transform:translate(-50%,-50%);z-index:3;background:var(--ink);color:var(--surface);font:700 .68rem var(--f-mono);padding:5px 9px;border-radius:999px;white-space:nowrap;box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 40%,transparent)}
+.packet[hidden]{display:none}
+.steps{counter-reset:s;list-style:none;padding:0!important}
+.steps li{counter-increment:s;padding:8px 10px 8px 44px;border-radius:10px;position:relative;border:2px solid transparent}
+.steps li::before{content:counter(s);position:absolute;left:8px;top:8px;width:26px;height:26px;border-radius:50%;background:var(--surface-2);display:grid;place-items:center;font:700 .8rem var(--f-mono)}
+.steps li.cur{border-color:var(--ink);background:var(--surface-2)}
+.steps li.cur::before{background:var(--ink);color:var(--surface)}
+.steps li.past::before{background:var(--good);color:var(--surface);content:"✓"}
+
+/* home */
+.hero{display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
+.hero h1{font-size:clamp(2.8rem,10vw,6rem);line-height:.92}
+.hero h1 em{font-style:normal;color:var(--accent);display:block}
+.stops{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:14px}
+.stopcard{text-decoration:none;color:var(--ink);background:var(--surface);border:2px solid var(--ink);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:6px;box-shadow:var(--shadow);transition:transform .15s;border-top:10px solid var(--k)}
+.stopcard:hover{transform:translateY(-4px)}
+.stopcard .num{font:700 .8rem var(--f-mono);color:var(--muted)}
+.stopcard .st{font-weight:700;font-size:.85rem}
+.stopcard.done .st{color:var(--good)}
+
+/* internet layers */
+.layers{display:flex;flex-direction:column;gap:10px}
+.services{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:10px}
+.svc{border:2px solid var(--ink);border-radius:12px;padding:12px;background:var(--surface);display:flex;flex-direction:column;gap:6px;min-height:120px;transition:opacity .3s,filter .3s}
+.svc.off{opacity:.4;filter:grayscale(1)}
+.svc.www{border-color:var(--c-domain);border-width:4px}
+.svc .tag{font:700 .7rem var(--f-mono);color:var(--c-domain)}
+.svc label{display:flex;gap:8px;align-items:center;min-height:44px;font-weight:700}
+.svc input{width:22px;height:22px}
+.infra{border:2px solid var(--ink);border-radius:12px;padding:14px;background:var(--ink);color:var(--surface);display:flex;flex-direction:column;gap:8px;position:relative;overflow:hidden}
+.infra.off{background:var(--muted)}
+.road{height:10px;border-radius:5px;background:repeating-linear-gradient(90deg,var(--surface) 0 14px,transparent 14px 28px);opacity:.55}
+.infra:not(.off) .road{animation:road 1.2s linear infinite}
+@keyframes road{to{background-position:28px 0}}
+.infra label{display:flex;gap:10px;align-items:center;min-height:44px;font-weight:700}
+.infra input{width:24px;height:24px}
+
+/* url */
+.urlbig{font:700 clamp(.95rem,3.3vw,1.7rem) var(--f-mono);display:flex;flex-wrap:wrap;row-gap:10px;align-items:flex-end;overflow-wrap:anywhere}
+.seg{max-width:100%;word-break:break-all;text-align:left;background:none;border:0;border-bottom:6px solid currentColor;padding:8px 2px 4px;font:inherit;min-height:44px;transition:transform .2s,background .2s;border-radius:6px 6px 0 0}
+.seg:hover,.seg[aria-pressed="true"]{transform:translateY(-6px);background:color-mix(in srgb,currentColor 14%,transparent)}
+.seg.hit{background:var(--good-bg)}
+.sep{color:var(--muted);padding-bottom:10px}
+.info{border-radius:12px;padding:14px;background:var(--surface-2);border-left:8px solid currentColor;min-height:96px}
+.info p{color:var(--ink)}
+
+/* http lane */
+.lane{position:relative;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:start;padding:14px;background:var(--surface-2);border-radius:var(--r);border:2px solid var(--ink)}
+.lane .box{background:var(--surface);border:3px solid currentColor;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px;min-height:150px;font-size:.85rem}
+.lane .box b{font-family:var(--f-display);color:var(--ink)}
+.lane .box .mono{font-size:.72rem;word-break:break-all;color:var(--ink);background:var(--surface-2);padding:6px;border-radius:6px;min-height:3.2em}
+.spy{color:var(--bad)}
+.wire{grid-column:1/-1;height:44px;position:relative;border-radius:999px;background:repeating-linear-gradient(90deg,var(--line) 0 10px,transparent 10px 20px)}
+.wire .packet{top:50%;left:8%;max-width:70%;overflow:hidden;text-overflow:ellipsis}
+.seg-toggle{display:inline-flex;border:2px solid var(--ink);border-radius:999px;overflow:hidden}
+.seg-toggle button{min-height:44px;padding:6px 18px;border:0;background:var(--surface);font:700 1rem var(--f-mono)}
+.seg-toggle button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.addr{display:flex;align-items:center;gap:8px;background:var(--surface-2);border-radius:999px;padding:6px 14px;font:500 .9rem var(--f-mono);overflow:hidden}
+
+/* mock browser */
+.mb{border:2px solid var(--ink);border-radius:12px;overflow:hidden;background:var(--surface)}
+.mb-tabs{display:flex;gap:4px;background:var(--surface-2);padding:6px 6px 0;overflow-x:auto}
+.mb-tab{min-height:40px;padding:4px 12px;border:2px solid var(--line);border-bottom:0;border-radius:10px 10px 0 0;background:var(--surface-2);font-size:.85rem;white-space:nowrap}
+.mb-tab[aria-selected="true"]{background:var(--surface);border-color:var(--ink);font-weight:700}
+.mb-bar{display:flex;gap:6px;padding:8px;align-items:center;flex-wrap:wrap;border-bottom:2px solid var(--line)}
+.mb-bar button{min-width:44px;min-height:44px;border:2px solid var(--line);border-radius:10px;background:var(--surface);font-weight:700}
+.mb-bar button.on{background:var(--c-cookie);color:var(--surface);border-color:var(--c-cookie)}
+.mb-bar form{flex:1 1 180px;display:flex;gap:6px}
+.mb-bar input{flex:1;min-width:0;min-height:44px;border:2px solid var(--line);border-radius:999px;padding:0 14px;font:500 .85rem var(--f-mono);background:var(--surface-2)}
+.mb-bm{display:flex;gap:6px;padding:6px 8px;flex-wrap:wrap;font-size:.8rem;border-bottom:1px solid var(--line);min-height:38px;align-items:center;color:var(--muted)}
+.mb-bm button{border:0;background:var(--surface-2);border-radius:8px;padding:6px 10px;font-size:.8rem;min-height:32px}
+.mb-page{padding:18px;min-height:190px;display:flex;flex-direction:column;gap:10px}
+.mb-page h4{font:800 1.4rem var(--f-display);margin:0}
+.mb-page .lk{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;min-height:32px;text-align:left}
+.mb-panel{margin:0 8px 8px;padding:10px;border-radius:10px;background:var(--surface-2);font-size:.85rem}
+.found{list-style:none;padding:0!important}
+.found li{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:10px;border:2px solid var(--line)}
+.found li i{font-style:normal;width:24px;height:24px;border-radius:50%;border:2px solid var(--line);flex:none;display:grid;place-items:center;font-size:.8rem}
+.found li.got{border-color:var(--good);background:var(--good-bg)}
+.found li.got i{background:var(--good);border-color:var(--good);color:var(--surface)}
+.code{font:500 .82rem/1.6 var(--f-mono);background:var(--ink);color:var(--surface);border-radius:12px;padding:14px;overflow-x:auto;white-space:pre;margin:0}
+.render{border:2px solid var(--ink);border-radius:12px;padding:14px;min-height:180px;display:flex;flex-direction:column;gap:8px}
+.render>*{transition:opacity .4s,transform .4s}
+.render .h{opacity:0;transform:translateY(8px)}
+.crab{width:72px;height:48px;border-radius:8px;background:var(--c-cookie);display:grid;place-items:center;color:var(--surface);font-weight:700;font-size:.75rem}
+
+/* cookies */
+.lab{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px}
+.shop{border:2px solid var(--ink);border-radius:12px;overflow:hidden;background:var(--surface);display:flex;flex-direction:column}
+.shop-top{background:var(--surface-2);padding:8px 12px;font:500 .8rem var(--f-mono);display:flex;gap:8px;align-items:center}
+.shop-body{padding:14px;display:flex;flex-direction:column;gap:12px;min-height:300px}
+.shop.closed .shop-body{align-items:center;justify-content:center;color:var(--muted);text-align:center}
+.prod{display:flex;flex-wrap:wrap;gap:8px}
+.login{display:flex;flex-direction:column;gap:8px;border-top:2px dashed var(--line);padding-top:12px}
+.login label{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-height:44px}
+.login input[type=text],.login select{min-height:44px;border:2px solid var(--line);border-radius:10px;padding:0 10px;background:var(--surface)}
+.login input[type=checkbox]{width:22px;height:22px}
+.greet{background:var(--good-bg);color:var(--good);padding:8px 12px;border-radius:10px;font-weight:700}
+.pc{display:flex;flex-direction:column;gap:12px}
+.mem{border:3px solid var(--ink);border-radius:12px;padding:12px;min-height:118px;display:flex;flex-direction:column;gap:8px;background:var(--surface)}
+.mem.ram{border-style:dashed}
+.mem h3 small{font:500 .75rem var(--f-body);color:var(--muted);display:block}
+.ck{border-radius:10px;padding:8px 10px;background:color-mix(in srgb,var(--c-cookie) 16%,var(--surface));border:2px solid var(--c-cookie);font:500 .75rem/1.5 var(--f-mono)}
+.ck b{font-family:var(--f-display);font-size:.9rem;display:block}
+.ck.crumble{animation:crumble .7s forwards}
+@keyframes crumble{to{opacity:0;transform:scale(.4) rotate(18deg);filter:blur(3px)}}
+.empty{color:var(--muted);font-size:.85rem}
+.log{background:var(--surface-2);border-radius:10px;padding:10px 12px;font-weight:700;min-height:3.2em}
+table{border-collapse:collapse;width:100%}
+.tw{overflow-x:auto}
+th,td{border:2px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top;font-size:.95rem}
+th{font-family:var(--f-display);background:var(--surface-2)}
+.flips{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:12px}
+.flip{min-height:120px;border:2px solid var(--c-cookie);border-radius:12px;background:var(--surface);padding:12px;text-align:left;display:flex;flex-direction:column;gap:6px}
+.flip b{font-family:var(--f-display);font-size:1.05rem}
+.flip span{font-size:.9rem;color:var(--muted)}
+.flip[aria-pressed="false"] span{visibility:hidden}
+.flip[aria-pressed="false"]::after{content:"Tap for an example";font-size:.8rem;color:var(--c-cookie);font-weight:700;margin-top:auto}
+
+/* exam */
+.q{gap:12px}
+.qh{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.qh .l{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.marks{font:700 .85rem var(--f-mono)}
+.q textarea{width:100%;min-height:96px;border:2px solid var(--line);border-radius:10px;padding:10px;background:var(--surface);resize:vertical}
+.ms{display:flex;flex-direction:column;gap:6px;background:var(--surface-2);border-radius:10px;padding:12px}
+.ms label{display:flex;gap:10px;align-items:flex-start;min-height:36px}
+.ms input{width:20px;height:20px;flex:none;margin-top:3px}
+.gap select,.tick select{min-height:40px;border:2px solid var(--ink);border-radius:8px;background:var(--surface);padding:0 6px;font-weight:700}
+.gap p{line-height:2.4}
+.score{position:sticky;top:78px;z-index:5}
+.bars{display:flex;flex-direction:column;gap:6px}
+.bar-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,2fr) 3.4em;gap:8px;align-items:center;font-size:.85rem}
+.track{height:12px;background:var(--surface-2);border-radius:6px;overflow:hidden}
+.track i{display:block;height:100%;background:var(--accent);border-radius:6px;transition:width .4s}
+.bar-row span:last-child{font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right}
+.confetti{position:fixed;left:50%;top:40%;width:10px;height:14px;z-index:50;pointer-events:none;animation:conf 1.1s ease-out forwards}
+@keyframes conf{to{transform:translate(var(--x),var(--y)) rotate(540deg);opacity:0}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="#home"><b>5.1</b><span>Follow One Click</span></a>
+    <nav class="route" id="route" aria-label="Pages"></nav>
+    <button class="icon-btn" id="theme" aria-label="Switch between light and dark theme">◐</button>
+  </div>
+</header>
+<main id="app" tabindex="-1"></main>
+
+<script>
+(function(){
+"use strict";
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const RM=matchMedia('(prefers-reduced-motion:reduce)').matches;
+const wait=ms=>new Promise(r=>setTimeout(r,RM?Math.min(ms,60):ms));
+const shuffle=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+/* ---------- saved progress (this browser only) ---------- */
+let store={done:{},exam:{}};
+try{const s=JSON.parse(localStorage.getItem('foc51')||'null');if(s&&s.done&&s.exam)store=s}catch(e){}
+const save=()=>{try{localStorage.setItem('foc51',JSON.stringify(store))}catch(e){}};
+
+const PAGES=[
+ {id:'home',label:'Start'},
+ {id:'internet-www',label:'Internet / WWW',title:'Internet vs World Wide Web',k:'--c-domain',obj:'Understand the difference between the internet and the World Wide Web'},
+ {id:'url',label:'URL',title:'The URL',k:'--c-protocol',obj:'Understand what is meant by a uniform resource locator (URL)'},
+ {id:'http',label:'HTTP / HTTPS',title:'HTTP and HTTPS',k:'--c-file',obj:'Describe the purpose and operation of HTTP and HTTPS'},
+ {id:'browser',label:'Browser',title:'The web browser',k:'--c-browser',obj:'Explain the purpose and functions of a web browser'},
+ {id:'journey',label:'Page journey',title:'How a web page reaches you',k:'--c-dns',obj:'Describe how web pages are located, retrieved and displayed'},
+ {id:'cookies',label:'Cookies',title:'Cookies',k:'--c-cookie',obj:'Explain what cookies are and how they are used, including session and persistent cookies'},
+ {id:'exam',label:'Exam practice'}
+];
+const TEACH=PAGES.slice(1,7);
+
+/* ---------- icons ---------- */
+const IC={
+ browser:'<svg viewBox="0 0 40 40" aria-hidden="true"><rect x="3" y="6" width="34" height="28" rx="5" fill="none" stroke="currentColor" stroke-width="3"/><path d="M3 15h34" stroke="currentColor" stroke-width="3"/><circle cx="9" cy="10.5" r="1.6" fill="currentColor"/><circle cx="14" cy="10.5" r="1.6" fill="currentColor"/></svg>',
+ dns:'<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 10c-4-3-9-3-15-2v22c6-1 11-1 15 2 4-3 9-3 15-2V8c-6-1-11-1-15 2z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M20 10v22" stroke="currentColor" stroke-width="3"/></svg>',
+ server:'<svg viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="4" width="28" height="9" rx="3" fill="none" stroke="currentColor" stroke-width="3"/><rect x="6" y="16" width="28" height="9" rx="3" fill="none" stroke="currentColor" stroke-width="3"/><rect x="6" y="28" width="28" height="9" rx="3" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="12" cy="8.5" r="1.6" fill="currentColor"/><circle cx="12" cy="20.5" r="1.6" fill="currentColor"/><circle cx="12" cy="32.5" r="1.6" fill="currentColor"/></svg>'
+};
+
+/* ---------- shared pieces ---------- */
+function confetti(){
+  if(RM)return;
+  const cols=['--c-protocol','--c-domain','--c-file','--c-cookie','--c-browser','--c-dns'];
+  for(let i=0;i<18;i++){const d=document.createElement('i');d.className='confetti';d.style.background=`var(${cols[i%6]})`;
+    d.style.setProperty('--x',(Math.random()*360-180)+'px');d.style.setProperty('--y',(Math.random()*-260+60)+'px');
+    document.body.appendChild(d);setTimeout(()=>d.remove(),1200)}
+}
+function markDone(id){ if(!store.done[id]){store.done[id]=1;save();confetti()} drawRoute(); }
+
+function head(p,big){const n=PAGES.indexOf(p);
+  return `<header class="phead"><p class="stop">Stop ${n} of 6</p><h1>${p.title}</h1><p class="big">${big}</p></header>`}
+function foot(p){const n=PAGES.indexOf(p),a=PAGES[n-1],b=PAGES[n+1];
+  return `<nav class="pn" aria-label="Previous and next page">${a?`<a class="btn" href="#${a.id}">← ${a.label}</a>`:'<span></span>'}${b?`<a class="btn primary" href="#${b.id}">Next: ${b.label} →</a>`:''}</nav>`}
+const examBox=pts=>`<section class="card exam"><h3>What to write in the exam</h3><ul>${pts.map(x=>`<li>${x}</li>`).join('')}</ul></section>`;
+const mistake=t=>`<section class="card mistake"><h3>Common mistake</h3><p>${t}</p></section>`;
+
+function qcHTML(qs){return `<section class="card qc"><h2>Quick check</h2><p class="hint">Get all three right to complete this stop.</p>${qs.map((q,i)=>`<fieldset data-q="${i}"><legend>${i+1}. ${q.q}</legend>${q.o.map((o,j)=>`<button type="button" class="opt" data-o="${j}">${o}</button>`).join('')}<p class="fb" aria-live="polite"></p></fieldset>`).join('')}<div class="qc-done" aria-live="polite"></div></section>`}
+function qcInit(root,pid,qs){const got=new Set();const box=$('.qc',root);
+  const fin=()=>{$('.qc-done',box).innerHTML='<p class="complete pop">Stop complete. You can move on.</p>'};
+  if(store.done[pid])fin();
+  box.addEventListener('click',e=>{const b=e.target.closest('.opt');if(!b)return;const fs=b.closest('fieldset'),i=+fs.dataset.q,q=qs[i],fb=$('.fb',fs);
+    if(+b.dataset.o===q.a){$$('.opt',fs).forEach(x=>{x.classList.remove('wrong');x.disabled=true});b.classList.add('right');fb.className='fb ok';fb.textContent=q.why;got.add(i);
+      if(got.size===qs.length){markDone(pid);fin()}}
+    else{b.classList.add('wrong','shake');setTimeout(()=>b.classList.remove('shake'),350);fb.className='fb no';fb.textContent=q.no||'Not that one. Look at the big idea at the top of the page.'}
+  });
+}
+
+/* tap-or-drag sorter */
+function sorter(el,items,bins,onDone){
+  let sel=null,left=items.length,first=0;const tried=new Set();
+  el.innerHTML=`<div class="pool" role="group" aria-label="Statements to sort">${shuffle(items.map((it,i)=>({...it,i}))).map(it=>`<button type="button" class="chip" draggable="true" aria-pressed="false" data-i="${it.i}">${it.t}</button>`).join('')}</div>
+  <div class="bins">${bins.map(b=>`<button type="button" class="bin" data-b="${b.id}"><strong>${b.label}</strong></button>`).join('')}</div><p class="fb" aria-live="polite">Tap a statement, then tap the box it belongs in. You can also drag.</p>`;
+  const fb=$('.fb',el);
+  const pick=c=>{$$('.chip',el).forEach(x=>x.setAttribute('aria-pressed','false'));sel=c;if(c)c.setAttribute('aria-pressed','true');$$('.bin',el).forEach(b=>b.classList.toggle('ready',!!c))};
+  const place=bin=>{if(!sel)return;const it=items[+sel.dataset.i];
+    if(it.bin===bin.dataset.b){if(!tried.has(sel.dataset.i))first++;const s=document.createElement('span');s.className='in pop';s.textContent=it.t;bin.appendChild(s);sel.remove();left--;pick(null);
+      fb.className='fb ok';fb.textContent=left?'Correct. '+left+' left.':'All sorted correctly.';if(!left&&onDone)onDone(first)}
+    else{tried.add(sel.dataset.i);sel.classList.add('shake');const c=sel;setTimeout(()=>c.classList.remove('shake'),350);fb.className='fb no';fb.textContent='Not that box. Think again and try the other one.'}};
+  el.addEventListener('click',e=>{const c=e.target.closest('.chip'),b=e.target.closest('.bin');if(c)pick(sel===c?null:c);else if(b)place(b)});
+  el.addEventListener('dragstart',e=>{const c=e.target.closest('.chip');if(c){pick(c);e.dataTransfer.setData('text/plain','x')}});
+  el.addEventListener('dragover',e=>{if(e.target.closest('.bin'))e.preventDefault()});
+  el.addEventListener('drop',e=>{const b=e.target.closest('.bin');if(b){e.preventDefault();place(b)}});
+}
+
+/* tap matcher */
+function matcher(el,pairs,onDone){
+  let a=null,b=null,n=0,first=0;const tried=new Set();
+  el.innerHTML=`<div class="match"><div>${pairs.map((p,i)=>`<button type="button" class="chip" data-s="a" data-i="${i}" aria-pressed="false">${p.a}</button>`).join('')}</div><div>${shuffle(pairs.map((p,i)=>i)).map(i=>`<button type="button" class="chip" data-s="b" data-i="${i}" aria-pressed="false">${pairs[i].b}</button>`).join('')}</div></div><p class="fb" aria-live="polite">Tap a term on the left, then its description on the right.</p>`;
+  const fb=$('.fb',el);
+  el.addEventListener('click',e=>{const c=e.target.closest('.chip');if(!c||c.classList.contains('locked'))return;
+    if(c.dataset.s==='a'){if(a)a.setAttribute('aria-pressed','false');a=c}else{if(b)b.setAttribute('aria-pressed','false');b=c}
+    c.setAttribute('aria-pressed','true');
+    if(a&&b){if(a.dataset.i===b.dataset.i){n++;if(!tried.has(a.dataset.i))first++;[a,b].forEach(x=>{x.classList.add('locked','pop');x.setAttribute('aria-pressed','false');x.insertAdjacentHTML('afterbegin',`<span class="n">${n}</span>`)});
+        fb.className='fb ok';fb.textContent=n===pairs.length?'All matched.':'Correct match.';if(n===pairs.length&&onDone)onDone(first)}
+      else{tried.add(a.dataset.i);[a,b].forEach(x=>{x.classList.add('shake');x.setAttribute('aria-pressed','false');setTimeout(()=>x.classList.remove('shake'),350)});fb.className='fb no';fb.textContent='Those two do not go together. Try again.'}
+      a=b=null}});
+}
+
+/* tap-the-part URL game */
+const PART={protocol:'protocol',domain:'domain name',file:'web page / file name'};
+function urlTap(el,rounds,onDone){
+  let r=0,first=0,miss=false;
+  const draw=()=>{const R=rounds[r];
+    el.innerHTML=`<p><strong>Round ${r+1} of ${rounds.length}.</strong> Tap the <strong>${PART[R.ask]}</strong>.</p>
+    <div class="urlbig" style="font-size:clamp(.85rem,2.6vw,1.25rem)"><button type="button" class="seg" data-p="protocol">${R.u[0]}</button><span class="sep">://</span><button type="button" class="seg" data-p="domain">${R.u[1]}</button><button type="button" class="seg" data-p="file">${R.u[2]}</button></div><p class="fb" aria-live="polite"></p>`};
+  draw();
+  el.addEventListener('click',e=>{const s=e.target.closest('.seg');if(!s||el.dataset.lock)return;const R=rounds[r],fb=$('.fb',el);
+    if(s.dataset.p===R.ask){if(!miss)first++;s.classList.add('hit','pop');fb.className='fb ok';fb.textContent='Correct.';el.dataset.lock=1;
+      setTimeout(()=>{delete el.dataset.lock;r++;miss=false;if(r<rounds.length)draw();else{el.innerHTML=`<p class="complete pop">Finished. ${first} of ${rounds.length} right first time.</p>`;if(onDone)onDone(first)}},RM?300:800)}
+    else{miss=true;s.classList.add('shake');setTimeout(()=>s.classList.remove('shake'),350);fb.className='fb no';fb.textContent='That is the '+PART[s.dataset.p]+'. Try again.'}});
+}
+
+/* ---------- the journey scene (home + stop 5) ---------- */
+const POS={device:[15,54],dns:[50,17],dns2:[85,17],server:[68,84]};
+const DOMAIN='www.pedalshop.com',IP='203.0.113.25';
+function journey(el,opt){
+  const compact=opt&&opt.compact;
+  const base=[
+   {cap:`The user types a URL into the browser's address bar (or clicks a link).`,at:'device'},
+   {cap:'The browser sends the domain name from the URL to the DNS.',from:'device',to:'dns',label:DOMAIN+' ?'},
+   {cap:'The DNS looks up the domain name in its database of domain names and matching IP addresses.',at:'dns'},
+   {cap:'The DNS returns the IP address to the browser.',from:'dns',to:'device',label:IP},
+   {cap:'The browser sends a request to the web server at that IP address, using HTTP or HTTPS.',from:'device',to:'server',label:'HTTPS request'},
+   {cap:'The web server sends the data for the web page (HTML) back to the browser.',from:'server',to:'device',label:'<html>…'},
+   {cap:'The browser renders the HTML and displays the web page.',at:'device',end:true}];
+  const extra=[
+   {cap:'This DNS cannot find the domain name, so it asks a second DNS.',from:'dns',to:'dns2',label:DOMAIN+' ?'},
+   {cap:'The second DNS finds the IP address and sends it back. The first DNS adds it to its own database.',from:'dns2',to:'dns',label:IP}];
+  let steps=base,i=-1,playing=false,busy=false,tok=0,branch=false;
+  const L=(a,b)=>`<line data-w="${a}-${b}" x1="${POS[a][0]}" y1="${POS[a][1]}" x2="${POS[b][0]}" y2="${POS[b][1]}"/>`;
+  el.innerHTML=`<div class="scene">
+    <svg class="wires" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${L('device','dns')}${L('dns','dns2')}${L('device','server')}</svg>
+    <div class="node t-browser" data-n="device" style="left:${POS.device[0]}%;top:${POS.device[1]}%">${IC.browser}<b>Web browser</b><div class="ab"></div><div class="scr">blank</div></div>
+    <div class="node t-dns" data-n="dns" style="left:${POS.dns[0]}%;top:${POS.dns[1]}%">${IC.dns}<b>DNS</b><small class="tbl">domain name → IP address</small></div>
+    <div class="node t-dns" data-n="dns2" hidden style="left:${POS.dns2[0]}%;top:${POS.dns2[1]}%">${IC.dns}<b>Second DNS</b><small>${DOMAIN} → ${IP}</small></div>
+    <div class="node t-server" data-n="server" style="left:${POS.server[0]}%;top:${POS.server[1]}%">${IC.server}<b>Web server</b><small>${IP}<br>stores the web pages</small></div>
+    <div class="packet" hidden></div></div>
+   <div class="row"><button type="button" class="btn primary" data-a="play">▶ Play</button>${compact?'':'<button type="button" class="btn" data-a="next">Next step</button>'}<button type="button" class="btn" data-a="replay">↺ Replay</button>
+   ${compact?'':'<label class="row" style="min-height:44px"><input type="checkbox" data-a="branch" style="width:22px;height:22px"> What if the first DNS cannot find it?</label>'}</div>
+   ${compact?'<p class="log" aria-live="polite">Press Play to follow one click from the address bar to the finished page.</p>':'<ol class="steps card" aria-live="polite"></ol>'}`;
+  const sc=$('.scene',el),pk=$('.packet',el),node=n=>$(`[data-n="${n}"]`,sc);
+  const list=()=>{if(compact)return;$('.steps',el).innerHTML=steps.map((s,k)=>`<li class="${k<i?'past':k===i?'cur':''}">${s.cap}</li>`).join('')};
+  const paint=()=>{ // scene state after step i
+    $('.ab',sc).textContent=i>=0?'https://'+DOMAIN:'';
+    const end=i>=steps.length-1;const scr=$('.scr',sc);scr.textContent=end?'Page displayed':i>=steps.length-2?'HTML received':'blank';scr.classList.toggle('loaded',end);
+    $('.tbl',sc).textContent=i>=2?DOMAIN+' → '+IP:'domain name → IP address';
+    $$('.node',sc).forEach(n=>n.classList.remove('active'));
+    const s=steps[i];if(s){node(s.to||s.at).classList.add('active')}
+    $('[data-a=play]',el).textContent=playing?'❚❚ Pause':'▶ Play';
+    if(compact)$('.log',el).textContent=s?s.cap:'Press Play to follow one click from the address bar to the finished page.';
+    list()};
+  const fly=(a,b,label)=>new Promise(res=>{pk.textContent=label;pk.style.transition='none';pk.style.left=POS[a][0]+'%';pk.style.top=POS[a][1]+'%';pk.hidden=false;void pk.offsetWidth;
+    const d=RM?1:1200;pk.style.transition=`left ${d}ms ease-in-out, top ${d}ms ease-in-out`;pk.style.left=POS[b][0]+'%';pk.style.top=POS[b][1]+'%';setTimeout(()=>{pk.hidden=true;res()},d+250)});
+  async function step(){const t=tok;busy=true;i++;const s=steps[i];
+    $$('.node',sc).forEach(n=>n.classList.remove('active'));
+    if(!compact){list()}else $('.log',el).textContent=s.cap;
+    if(i===0&&!RM){const ab=$('.ab',sc),u='https://'+DOMAIN;for(let k=1;k<=u.length;k++){if(t!==tok)return;ab.textContent=u.slice(0,k);await wait(35)}}
+    if(s.from){node(s.from).classList.add('active');await fly(s.from,s.to,s.label)}else await wait(500);
+    if(t!==tok)return;busy=false;paint()}
+  async function play(){playing=true;paint();const t=tok;while(playing&&i<steps.length-1){await step();if(t!==tok)return;await wait(900);if(t!==tok)return}playing=false;paint()}
+  const reset=()=>{tok++;i=-1;playing=false;busy=false;pk.hidden=true;paint()};
+  el.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b)return;const a=b.dataset.a;
+    if(a==='play'){if(playing){playing=false;paint()}else{if(i>=steps.length-1)reset();if(!busy)play()}}
+    if(a==='next'&&!busy&&!playing&&i<steps.length-1)step();
+    if(a==='replay'){reset();play()}});
+  el.addEventListener('change',e=>{if(e.target.dataset.a!=='branch')return;branch=e.target.checked;steps=branch?[...base.slice(0,3),...extra,...base.slice(3)]:base;
+    node('dns2').hidden=!branch;reset()});
+  paint();
+  return {play,reset,stop:()=>{tok++;playing=false}};
+}
+
+/* ---------- pages ---------- */
+const V={};
+let cleanup=null;
+
+V.home={html(){return `
+<section class="hero">
+  <p class="stop">Cambridge O Level / IGCSE Computer Science · Topic 5.1</p>
+  <h1>Follow <em>one click.</em></h1>
+  <p class="big">You type a web address and press Enter. About a second later a page appears. This site shows you everything that happens in between, in six short stops.</p>
+  <div id="heroScene"></div>
+</section>
+<section class="card"><h2>The six stops</h2><p class="hint">Each stop takes about five minutes. Finish its quick check to tick it off.</p>
+  <div class="stops">${TEACH.map((p,n)=>`<a class="stopcard ${store.done[p.id]?'done':''}" href="#${p.id}" style="--k:var(${p.k})"><span class="num">STOP ${n+1}</span><h3>${p.title}</h3><p class="hint">${p.obj}.</p><span class="st">${store.done[p.id]?'✓ Complete':'Not done yet →'}</span></a>`).join('')}</div>
+</section>
+<section class="card"><h2>After the six stops</h2><p>Try 13 exam-style questions worth 44 marks, check your answers against the marking points, and get a one-page summary.</p>
+  <div class="row"><a class="btn primary" href="#internet-www">Start at stop 1 →</a><a class="btn" href="#exam">Go to exam practice</a><button type="button" class="btn" id="reset">Reset progress</button><span class="fb" id="resetFb" aria-live="polite"></span></div>
+</section>`},
+init(r){const j=journey($('#heroScene',r),{compact:true});cleanup=j.stop;if(!RM)setTimeout(()=>{if(location.hash.replace('#','')===''||location.hash==='#home')j.play()},600);
+  let armed=false;$('#reset',r).addEventListener('click',e=>{if(!armed){armed=true;e.target.textContent='Tap again to clear all progress';return}
+    store={done:{},exam:{}};save();render()})}};
+
+V['internet-www']={html(p){return head(p,'The <strong>internet</strong> is the infrastructure. The <strong>World Wide Web</strong> is the collection of websites and web pages accessed using the internet.')+`
+<section class="card"><h2>Switch the layers on and off</h2><p>The dark strip at the bottom is the internet: the cables, routers and networks that join devices together. The boxes above are things that travel over it. Turn them off and on. Then turn the internet itself off.</p>
+  <div class="layers" id="layers">
+    <div class="services">
+      <div class="svc www" data-s><span class="tag">WORLD WIDE WEB</span><h3>Web pages</h3><p class="hint">Websites viewed in a browser.</p><label><input type="checkbox" checked id="s-web"> On</label></div>
+      <div class="svc" data-s><span class="tag" style="color:var(--muted)">NOT THE WEB</span><h3>Email</h3><p class="hint">Sending and receiving messages.</p><label><input type="checkbox" checked id="s-mail"> On</label></div>
+      <div class="svc" data-s><span class="tag" style="color:var(--muted)">NOT THE WEB</span><h3>Online chat</h3><p class="hint">Text, audio and video chat.</p><label><input type="checkbox" checked id="s-chat"> On</label></div>
+    </div>
+    <div class="infra" id="infra"><div class="road"></div><h3>The internet</h3><p>A worldwide collection of interconnected networks and devices. Uses TCP and IP.</p><label><input type="checkbox" checked id="s-net"> Internet connected</label><div class="road"></div></div>
+  </div>
+  <p class="log" id="layerLog" aria-live="polite">Everything is on. Web pages, email and chat all travel over the internet.</p>
+</section>
+<section class="card"><h2>Sort the statements</h2><div id="sort1"></div></section>
+`+examBox(['The internet is the infrastructure: a worldwide collection of interconnected networks and devices.','The World Wide Web is the collection of websites and web pages accessed using the internet.','The web uses HTTP and HTTPS, and URLs give the location of web pages.','Web pages are accessed using a web browser.'])
++mistake('Writing "the web is the internet". The web is one thing that runs on the internet. Email and online chat also use the internet, and they are not part of the web.')
++qcHTML(QC['internet-www'])+foot(p)},
+init(r,p){const net=$('#s-net',r),log=$('#layerLog',r);
+  const upd=()=>{const on=net.checked;$('#infra',r).classList.toggle('off',!on);
+    $$('[data-s]',r).forEach(s=>s.classList.toggle('off',!on||!$('input',s).checked));
+    log.textContent=!on?'The internet is off, so nothing above it works. The web needs the internet.':!$('#s-web',r).checked?'The web is off, but the internet still works. Email and chat still travel over it. So the web is only one part.':'The internet carries web pages, email and chat. Only the web pages are the World Wide Web.'};
+  $('#layers',r).addEventListener('change',upd);
+  sorter($('#sort1',r),[
+   {t:'A worldwide collection of interconnected networks and devices',bin:'i'},{t:'Lets users send and receive emails',bin:'i'},{t:'Allows online chat by text, audio and video',bin:'i'},{t:'Uses TCP and IP',bin:'i'},
+   {t:'A collection of multimedia web pages and websites',bin:'w'},{t:'Uses HTTP and HTTPS',bin:'w'},{t:'Uses URLs to give the location of web pages',bin:'w'},{t:'Accessed using a web browser',bin:'w'}],
+   [{id:'i',label:'Internet'},{id:'w',label:'World Wide Web'}]);
+  qcInit(r,p.id,QC[p.id])}};
+
+const URLINFO={
+ protocol:['Protocol','t-protocol','The set of rules used to transfer the page. It is usually <strong>http</strong> or <strong>https</strong>.'],
+ domain:['Domain name','t-domain','The name of the website. The DNS uses it to find the IP address of the web server.'],
+ file:['Web page / file name','t-file','The page or file you want on that website. If it is left out, you get the home page.'],
+ host:['Domain host','t-domain','<strong>www</strong> is the domain host.'],
+ name:['Domain name','t-domain','<strong>tidepoolnews</strong> is the name of the website.'],
+ type:['Domain type','t-domain','<strong>.com</strong> is the domain type. Others are .org, .net and .gov. Some addresses also end in a country code such as .uk or .de.']};
+V.url={html(p){return head(p,'A <strong>URL</strong> (uniform resource locator) is a text-based address for a web page. It can contain the protocol, the domain name and the web page or file name.')+`
+<section class="card"><h2>Take the URL apart</h2><p>Tap each coloured part to see what it does.</p>
+  <div class="urlbig" id="dis"></div>
+  <div class="info t-protocol" id="uinfo" aria-live="polite"><h3>Three parts</h3><p>Protocol, domain name, and web page / file name. Tap one.</p></div>
+  <label class="row" style="min-height:44px"><input type="checkbox" id="zoom" style="width:22px;height:22px"> Zoom in on the domain name (extra detail from the textbook)</label>
+  <p class="hint">People use URLs because text is much easier to remember than an IP address such as ${IP}.</p>
+</section>
+<section class="card"><h2>Tap the part</h2><p class="hint">This is a common 1 to 3 mark question: "Identify the protocol / domain name / file name."</p><div id="tapgame"></div></section>
+`+examBox(['A URL is a text-based address for a web page.','It can contain the protocol, the domain name and the web page / file name.','Example: in <span class="mono">https://www.tidepoolnews.com/sport/results.html</span> the protocol is https, the domain name is www.tidepoolnews.com and the file name is /sport/results.html.'])
++mistake('Mixing up a URL and an IP address. A URL is text that people type. An IP address is the number that identifies the web server. The DNS turns one into the other.')
++qcHTML(QC.url)+foot(p)},
+init(r,p){const dis=$('#dis',r),info=$('#uinfo',r);
+  const draw=z=>{dis.innerHTML=`<button type="button" class="seg t-protocol" data-k="protocol" aria-pressed="false">https</button><span class="sep">://</span>`+
+    (z?`<button type="button" class="seg t-domain" data-k="host" aria-pressed="false">www</button><span class="sep">.</span><button type="button" class="seg t-domain" data-k="name" aria-pressed="false">tidepoolnews</button><button type="button" class="seg t-domain" data-k="type" aria-pressed="false">.com</button>`
+      :`<button type="button" class="seg t-domain" data-k="domain" aria-pressed="false">www.tidepoolnews.com</button>`)+
+    `<button type="button" class="seg t-file" data-k="file" aria-pressed="false">/sport/results.html</button>`};
+  draw(false);
+  dis.addEventListener('click',e=>{const s=e.target.closest('.seg');if(!s)return;$$('.seg',dis).forEach(x=>x.setAttribute('aria-pressed',x===s));const I=URLINFO[s.dataset.k];
+    info.className='info pop '+I[1];info.innerHTML=`<h3>${I[0]}</h3><p>${I[2]}</p>`});
+  $('#zoom',r).addEventListener('change',e=>draw(e.target.checked));
+  urlTap($('#tapgame',r),[
+   {u:['https','www.pedalshop.com','/bikes/helmets.html'],ask:'protocol'},
+   {u:['http','www.quizcorner.org','/maths/fractions.html'],ask:'domain'},
+   {u:['https','www.riverschool.co.uk','/year10/timetable.pdf'],ask:'file'},
+   {u:['https','www.tidepoolnews.com','/weather/today.html'],ask:'domain'},
+   {u:['http','www.oakmuseum.net','/visit/map.html'],ask:'protocol'}]);
+  qcInit(r,p.id,QC.url)}};
+
+V.http={html(p){return head(p,'<strong>HTTP</strong> is the protocol used to transfer web pages between a web browser and a web server. <strong>HTTPS</strong> does the same job with security added: the data is encrypted.')+`
+<section class="card"><h2>Send a password both ways</h2><p>A <strong>protocol</strong> is a set of rules for communication between devices. Choose a protocol, then send the login. Watch what the person listening in the middle can see.</p>
+  <div class="row"><div class="seg-toggle" role="group" aria-label="Protocol"><button type="button" data-m="http" aria-pressed="true">HTTP</button><button type="button" data-m="https" aria-pressed="false">HTTPS</button></div><button type="button" class="btn primary" id="send">Send the login →</button></div>
+  <div class="addr" id="addr"></div>
+  <div class="lane" id="lane">
+    <div class="box t-browser">${IC.browser.replace('<svg','<svg width="30" height="30"')}<b>Web browser</b><span>Sends:</span><div class="mono">password: tiger123</div></div>
+    <div class="box spy"><b>Someone listening in</b><span>Sees:</span><div class="mono" id="spy">nothing yet</div></div>
+    <div class="box t-server">${IC.server.replace('<svg','<svg width="30" height="30"')}<b>Web server</b><span>Receives:</span><div class="mono" id="srv">nothing yet</div></div>
+    <div class="wire"><div class="packet" id="hp" hidden></div></div>
+  </div>
+  <p class="log" id="hlog" aria-live="polite">HTTP is selected. Press "Send the login".</p>
+</section>
+<section class="card"><h2>When does HTTPS matter most?</h2><p class="hint">HTTPS is used to protect sensitive information such as passwords, payment details and personal data.</p><div id="sort2"></div></section>
+`+examBox(['HTTP and HTTPS are protocols: sets of rules for transferring web pages between a browser and a web server.','HTTPS is the secure version. The "S" stands for secure. It uses SSL or TLS.','With HTTPS the data is <strong>encrypted</strong>, so it cannot be understood if it is intercepted. With HTTP it is not encrypted.','2-mark answer for one difference: "HTTPS encrypts the data being transmitted to keep it secure, but HTTP does not."'])
++mistake('Writing "HTTPS stops data being intercepted". It does not. Data can still be intercepted, but it is encrypted so it is meaningless to whoever reads it.')
++qcHTML(QC.http)+foot(p)},
+init(r,p){let mode='http',busy=false;const hp=$('#hp',r),spy=$('#spy',r),srv=$('#srv',r),log=$('#hlog',r),addr=$('#addr',r);
+  const scramble=()=>Array.from({length:18},()=>'x7#Qp9$Zk2!vB8@Lm4&'[Math.floor(Math.random()*19)]).join('');
+  const setMode=m=>{mode=m;$$('.seg-toggle button',r).forEach(b=>b.setAttribute('aria-pressed',b.dataset.m===m));
+    addr.innerHTML=(m==='https'?'<span aria-hidden="true">🔒</span><span class="sr">Padlock: secure.</span>':'<span>Not secure</span>')+` <span><b class="t-protocol">${m}</b>://www.pedalshop.com/login</span>`;
+    spy.textContent='nothing yet';srv.textContent='nothing yet';log.textContent=m.toUpperCase()+' is selected. Press "Send the login".'};
+  setMode('http');
+  $('.seg-toggle',r).addEventListener('click',e=>{const b=e.target.closest('button');if(b&&!busy)setMode(b.dataset.m)});
+  $('#send',r).addEventListener('click',async()=>{if(busy)return;busy=true;const plain='password: tiger123',sec=mode==='https',txt=sec?scramble():plain;
+    spy.textContent='…';srv.textContent='…';hp.textContent=txt;hp.style.transition='none';hp.style.left='10%';hp.hidden=false;void hp.offsetWidth;
+    const d=RM?1:900;hp.style.transition=`left ${d}ms linear`;hp.style.left='50%';await wait(d+100);
+    spy.textContent=txt;spy.classList.add('pop');await wait(500);hp.style.left='90%';await wait(d+100);hp.hidden=true;spy.classList.remove('pop');
+    srv.textContent=plain;log.textContent=sec?'HTTPS: the data was encrypted before it left the browser. The listener saw only scrambled characters. The server decrypted it.':'HTTP: the data was sent as plain text. The listener could read the password.';busy=false});
+  sorter($('#sort2',r),[{t:'Logging in to online banking',bin:'s'},{t:'Paying for trainers with a bank card',bin:'s'},{t:'Typing a password into a school portal',bin:'s'},{t:'Filling in a form with your home address',bin:'s'},{t:'Reading a public bus timetable',bin:'n'},{t:'Looking at a museum opening-times page',bin:'n'}],
+   [{id:'s',label:'Sensitive data is sent: HTTPS essential'},{id:'n',label:'No sensitive data is sent'}]);
+  qcInit(r,p.id,QC.http)}};
+
+const SITES={
+ 'www.tidepoolnews.com':{t:'Tidepool News',b:'Low tide is at 6 pm today. Three crabs were seen near the pier.',l:[['Visit the bike shop','www.pedalshop.com'],['Try a quiz','www.quizcorner.org']]},
+ 'www.pedalshop.com':{t:'Pedal Shop',b:'Helmets, lights and locks for every rider.',l:[['Read the news','www.tidepoolnews.com']]},
+ 'www.quizcorner.org':{t:'Quiz Corner',b:'Ten quick questions on networks. Can you beat 8 out of 10?',l:[['Back to the news','www.tidepoolnews.com'],['Bike shop','www.pedalshop.com']]}};
+const HOME='www.tidepoolnews.com';
+const FUN=[['address','Provides an address bar','Type www.quizcorner.org in the bar and press Go.'],['nav','Provides navigation tools','Press the back, forward or home button.'],['tabs','Allows use of multiple tabs','Press + to open a new tab.'],['bookmarks','Stores bookmarks and favourites','Press ☆ to bookmark this page.'],['history','Records user history','Press History to see the pages visited.'],['cookies','Stores cookies','Press Cookies to see what is stored.']];
+V.browser={html(p){return head(p,'The main purpose of a <strong>web browser</strong> is to render HTML and display web pages.')+`
+<section class="card"><h2>See what "render HTML" means</h2><p>A web server sends HTML: text with tags. The browser translates it into the page you see.</p>
+  <div class="grid2"><div><h3>HTML sent by the web server</h3><pre class="code">${esc('<h1>Tidepool News</h1>\n<img src="crab.png">\n<p>Low tide is at 6 pm.</p>\n<a href="more.html">Read more</a>')}</pre></div>
+  <div><h3>What the browser displays</h3><div class="render" id="rend"><p class="hint" id="rhint">Nothing displayed yet.</p><h3 class="h" style="font-size:1.6rem">Tidepool News</h3><div class="crab h">crab.png</div><p class="h">Low tide is at 6 pm.</p><a class="h" href="#browser">Read more</a></div></div></div>
+  <div class="row"><button type="button" class="btn primary" id="doRender">Render the HTML</button></div>
+</section>
+<section class="card"><h2>Find the six functions</h2><p>This mock browser works. Use it to discover the six functions in the syllabus.</p>
+  <div class="grid2"><div class="mb" id="mb"></div>
+  <div><h3 id="fcount">0 of 6 found</h3><ul class="found" id="found"></ul><p class="complete" id="aid" hidden>All six found. Memory aid: <strong>BATCH-N</strong> = Bookmarks, Address bar, Tabs, Cookies, History, Navigation tools.</p></div></div>
+</section>
+`+examBox(['"State the purpose of a web browser": to render HTML and display web pages.','"Give three functions": choose from storing bookmarks and favourites, recording user history, allowing use of multiple tabs, storing cookies, providing navigation tools, providing an address bar.','If the question already names one function (often storing cookies), give three <em>different</em> ones.'])
++mistake('Giving the job of another part of the system. Finding IP addresses is the job of the DNS. Storing a website\'s pages is the job of the web server.')
++qcHTML(QC.browser)+foot(p)},
+init(r,p){
+  $('#doRender',r).addEventListener('click',async e=>{e.target.disabled=true;$('#rhint',r).hidden=true;for(const x of $$('#rend .h',r)){x.classList.remove('h');await wait(450)}});
+  const S={tabs:[{st:[HOME],i:0}],cur:0,bm:[],hist:[HOME],panel:null,found:new Set(),msg:''};
+  const tab=()=>S.tabs[S.cur],url=()=>tab().st[tab().i];
+  const found=k=>{if(S.found.has(k))return;S.found.add(k);if(S.found.size===6)confetti()};
+  const go=u=>{const t=tab();t.st=t.st.slice(0,t.i+1);t.st.push(u);t.i++;S.hist.push(u)};
+  const drawFound=()=>{$('#found',r).innerHTML=FUN.map(f=>`<li class="${S.found.has(f[0])?'got':''}"><i>${S.found.has(f[0])?'✓':''}</i><span><strong>${S.found.has(f[0])?f[1]:'Function not found yet'}</strong><br><span class="hint">${f[2]}</span></span></li>`).join('');
+    $('#fcount',r).textContent=S.found.size+' of 6 found';$('#aid',r).hidden=S.found.size<6};
+  const draw=()=>{const u=url(),site=SITES[u],t=tab();
+    $('#mb',r).innerHTML=`<div class="mb-tabs" role="tablist">${S.tabs.map((x,k)=>`<button type="button" role="tab" class="mb-tab" aria-selected="${k===S.cur}" data-a="tab" data-k="${k}">${(SITES[x.st[x.i]]||{t:'Not found'}).t}</button>`).join('')}<button type="button" class="mb-tab" data-a="newtab" aria-label="New tab">+</button></div>
+    <div class="mb-bar"><button type="button" data-a="back" aria-label="Back" ${t.i?'':'disabled'}>←</button><button type="button" data-a="fwd" aria-label="Forward" ${t.i<t.st.length-1?'':'disabled'}>→</button><button type="button" data-a="home" aria-label="Home">⌂</button>
+      <form data-a="goform"><label class="sr" for="mbaddr">Address bar</label><input id="mbaddr" value="${u}" autocomplete="off" spellcheck="false"><button type="submit">Go</button></form>
+      <button type="button" data-a="star" aria-label="Bookmark this page" aria-pressed="${S.bm.includes(u)}">${S.bm.includes(u)?'★':'☆'}</button></div>
+    <div class="mb-bar" style="padding-top:0;border:0"><button type="button" data-a="history" class="${S.panel==='history'?'on':''}">History</button><button type="button" data-a="cookies" class="${S.panel==='cookies'?'on':''}">Cookies</button></div>
+    <div class="mb-bm"><span>Bookmarks:</span>${S.bm.length?S.bm.map(b=>`<button type="button" data-a="open" data-u="${b}">★ ${SITES[b].t}</button>`).join(''):'<span>none yet</span>'}</div>
+    ${S.panel==='history'?`<div class="mb-panel"><strong>User history</strong> (newest first)<br>${[...S.hist].reverse().slice(0,6).map(h=>esc(h)).join('<br>')}</div>`:''}
+    ${S.panel==='cookies'?`<div class="mb-panel"><strong>Cookies stored by this browser</strong><br>${[...new Set(S.hist)].filter(h=>SITES[h]).map(h=>`${h}: language=en`).join('<br>')}</div>`:''}
+    <div class="mb-page">${site?`<h4>${site.t}</h4><p>${site.b}</p>${site.l.map(l=>`<button type="button" class="lk" data-a="open" data-u="${l[1]}">${l[0]}</button>`).join('')}`:`<h4>Page not found</h4><p>This mock-up only has three websites: www.tidepoolnews.com, www.pedalshop.com and www.quizcorner.org.</p>`}</div>`;
+    drawFound()};
+  const mb=$('#mb',r);
+  mb.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b||b.dataset.a==='goform')return;const a=b.dataset.a,t=tab();
+    if(a==='back'&&t.i){t.i--;found('nav')}
+    if(a==='fwd'&&t.i<t.st.length-1){t.i++;found('nav')}
+    if(a==='home'){go(HOME);found('nav')}
+    if(a==='newtab'&&S.tabs.length<4){S.tabs.push({st:[HOME],i:0});S.cur=S.tabs.length-1;found('tabs')}
+    if(a==='tab')S.cur=+b.dataset.k;
+    if(a==='star'){const u=url();if(SITES[u]){S.bm=S.bm.includes(u)?S.bm.filter(x=>x!==u):[...S.bm,u];found('bookmarks')}}
+    if(a==='history'||a==='cookies'){S.panel=S.panel===a?null:a;found(a)}
+    if(a==='open')go(b.dataset.u);
+    draw()});
+  mb.addEventListener('submit',e=>{e.preventDefault();const v=$('#mbaddr',r).value.trim().toLowerCase().replace(/^https?:\/\//,'').replace(/\/.*$/,'');if(!v)return;go(v);found('address');draw()});
+  draw();qcInit(r,p.id,QC.browser)}};
+
+V.journey={html(p){return head(p,'The browser uses a <strong>DNS</strong> to turn the domain name into an <strong>IP address</strong>, asks the <strong>web server</strong> at that address for the page, then renders the <strong>HTML</strong> it receives.')+`
+<section class="card"><h2>Watch the journey, step by step</h2><p>This is the most heavily examined part of the topic. Questions on it can be worth up to 7 marks. Play it through, then use "Next step" to go at your own speed.</p><div id="jr"></div>
+  <p class="hint">The DNS (domain name server) works like a phone book. It turns a name people can remember into a number the network can use. Without it you would have to remember the IP address of every website.</p></section>
+<section class="card"><h2>Put the steps in order</h2><p class="hint">Use the arrows to move each step up or down, then check.</p><ol class="steps" id="order" style="gap:8px"></ol><div class="row"><button type="button" class="btn primary" id="chk">Check my order</button><span class="fb" id="ofb" aria-live="polite"></span></div></section>
+<section class="card"><h2>Who does what?</h2><div id="who"></div></section>
+`+examBox(['The user enters a URL into the address bar of the web browser.','The browser sends the domain name to the DNS (domain name server).','The DNS holds a database of domain names and their IP addresses. It finds the matching IP address and returns it to the browser.','The browser sends a request to the web server at that IP address.','The web server sends the data for the web page (HTML) back to the browser.','The browser renders the HTML and displays the web page.'])
++mistake('Saying the DNS stores or sends the web page. The DNS only finds the IP address. The <em>web server</em> stores the page and sends it.')
++qcHTML(QC.journey)+foot(p)},
+init(r,p){const j=journey($('#jr',r));cleanup=j.stop;
+  const right=['The user types a URL into the address bar.','The browser sends the domain name to the DNS.','The DNS finds the matching IP address and returns it to the browser.','The browser sends a request to the web server at that IP address.','The web server sends the HTML for the page to the browser.','The browser renders the HTML and displays the page.'];
+  let ord=shuffle(right.map((_,k)=>k));if(ord.every((v,k)=>v===k))ord.reverse();
+  const ol=$('#order',r);
+  const draw=()=>{ol.innerHTML=ord.map((v,k)=>`<li style="border-color:var(--line);display:flex;gap:8px;align-items:center;justify-content:space-between"><span>${right[v]}</span><span class="row" style="flex-wrap:nowrap;gap:4px"><button type="button" class="icon-btn" data-d="-1" data-k="${k}" aria-label="Move up" ${k?'':'disabled'}>↑</button><button type="button" class="icon-btn" data-d="1" data-k="${k}" aria-label="Move down" ${k<5?'':'disabled'}>↓</button></span></li>`).join('')};
+  draw();
+  ol.addEventListener('click',e=>{const b=e.target.closest('[data-d]');if(!b)return;const k=+b.dataset.k,n=k+ +b.dataset.d;[ord[k],ord[n]]=[ord[n],ord[k]];draw();$('#ofb',r).textContent=''});
+  $('#chk',r).addEventListener('click',()=>{const ok=ord.filter((v,k)=>v===k).length,fb=$('#ofb',r);
+    if(ok===6){fb.className='fb ok';fb.textContent='Correct order.';$$('li',ol).forEach(l=>l.classList.add('past'))}else{fb.className='fb no';fb.textContent=ok+' of 6 are in the right place. Remember: the DNS comes before the web server.'}});
+  matcher($('#who',r),[{a:'Web browser',b:'Sends the request and renders the HTML to display the page'},{a:'DNS',b:'Finds the IP address that matches a domain name'},{a:'IP address',b:'The number that identifies the web server on the internet'},{a:'Web server',b:'Stores the web pages and sends them when requested'},{a:'HTML',b:'The language the web page is written in'}]);
+  qcInit(r,p.id,QC.journey)}};
+
+const ITEMS=['Helmet','Bike lock','Front light'];
+const GREET={en:'Welcome back',fr:'Bon retour',es:'Bienvenido de nuevo'},BASK={en:'Basket',fr:'Panier',es:'Cesta'};
+const MISS=[['basket','Add an item to the basket'],['login','Log in with "Remember me" ticked'],['close','Close the browser'],['reopen','Reopen the browser'],['gone','Remove the persistent cookie (delete it, or fast-forward to its expiry date)']];
+V.cookies={html(p){return head(p,'A <strong>cookie</strong> is a small text file sent by a web server and stored by the web browser on the user\'s device. The website reads it on later visits.')+`
+<section class="card"><h2>The cookie lab</h2><p>Use the shop on the left. Watch the computer on the right to see where each cookie is stored and when it disappears. Complete the five missions.</p>
+  <ul class="found" id="miss"></ul>
+  <div class="lab"><div class="shop" id="shop"></div>
+   <div class="pc"><div class="mem ram"><h3>RAM <small>temporary memory</small></h3><div id="ram"></div></div>
+    <div class="mem"><h3>Hard drive <small>secondary storage</small></h3><div id="hdd"></div></div>
+    <div class="row"><button type="button" class="btn primary" id="power"></button><button type="button" class="btn" id="ff">Fast-forward to expiry date</button><button type="button" class="btn" id="del">Delete cookies</button></div></div></div>
+  <p class="log" id="clog" aria-live="polite">The browser is open. No cookies are stored yet.</p>
+</section>
+<section class="card"><h2>Session cookie vs persistent cookie</h2><div class="tw"><table><thead><tr><th></th><th>Session cookie</th><th>Persistent cookie</th></tr></thead><tbody>
+  <tr><th>Where stored</th><td>Temporary memory (RAM)</td><td>Hard drive / secondary storage</td></tr>
+  <tr><th>When deleted</th><td>When the browser is closed or the session ends</td><td>When the expiry date is reached or the user deletes it</td></tr>
+  <tr><th>Typical use</th><td>Holding items in an online shopping basket</td><td>Remembering login details and preferences across visits</td></tr></tbody></table></div></section>
+<section class="card"><h2>What cookies are used for</h2><div class="flips">
+  ${[['Saving personal details','A shop fills in your name and delivery address for you.'],['Tracking user preferences','A site remembers your language, currency or dark mode.'],['Holding items in an online shopping cart','Your basket still has the helmet in it when you change page.'],['Storing login details','You do not have to type your username every visit.']].map(f=>`<button type="button" class="flip" aria-pressed="false"><b>${f[0]}</b><span>${f[1]}</span></button>`).join('')}</div></section>
+`+examBox(['A cookie is a small text file, sent by a web server and stored by the web browser.','Session cookies are stored in memory (RAM) and are deleted when the browser is closed.','Persistent cookies are stored on the hard drive and stay until they expire or the user deletes them.','Uses: saving personal details, tracking user preferences, holding items in an online shopping cart, storing login details.','When you compare the two types, always say <strong>where each is stored</strong> and <strong>when each is deleted</strong>.'])
++mistake('Writing an opinion, such as "cookies are bad because they spy on you". The question asks what cookies are and what they are used for. Describe what they do.')
++qcHTML(QC.cookies)+foot(p)},
+init(r,p){const L={open:true,basket:[],logged:null,viaSession:false,lang:'en',persist:null,m:new Set()};
+  const log=t=>{$('#clog',r).textContent=t};
+  const hit=k=>{if(!L.m.has(k)){L.m.add(k);if(L.m.size===5)confetti()}};
+  const draw=()=>{const sess=L.open&&(L.basket.length||L.viaSession);
+    $('#miss',r).innerHTML=MISS.map((m,k)=>`<li class="${L.m.has(m[0])?'got':''}"><i>${L.m.has(m[0])?'✓':k+1}</i><span>${m[1]}</span></li>`).join('');
+    $('#ram',r).innerHTML=sess?`<div class="ck pop"><b>Session cookie</b>${L.basket.length?'basket = '+L.basket.join(', ')+'<br>':''}${L.viaSession?'loggedIn = '+esc(L.logged)+'<br>':''}expires = (no expiry date)</div>`:'<p class="empty">Empty</p>';
+    $('#hdd',r).innerHTML=L.persist?`<div class="ck"><b>Persistent cookie</b>user = ${esc(L.persist.name)}<br>language = ${L.persist.lang}<br>expires = in 30 days</div>`:'<p class="empty">Empty</p>';
+    $('#power',r).textContent=L.open?'✕ Close browser':'Reopen browser';$('#power',r).disabled=false;
+    $('#ff',r).disabled=$('#del',r).disabled=!L.persist;
+    const shop=$('#shop',r);shop.classList.toggle('closed',!L.open);
+    shop.innerHTML=L.open?`<div class="shop-top"><span aria-hidden="true">🔒</span> https://www.pedalshop.com</div><div class="shop-body">
+      ${L.logged?`<p class="greet">${GREET[L.lang]}, ${esc(L.logged)}!</p>`:''}
+      <h3>Pedal Shop</h3><div class="prod">${ITEMS.map(it=>`<button type="button" class="btn" data-add="${it}" ${L.basket.includes(it)?'disabled':''}>+ ${it}</button>`).join('')}</div>
+      <p><strong>${BASK[L.lang]}:</strong> ${L.basket.length?L.basket.join(', '):'empty'}</p>
+      ${L.logged?'':`<form class="login" id="lf"><label for="nm">Display name <input type="text" id="nm" value="Sam" maxlength="14" autocomplete="off"></label>
+        <label for="lg">Language <select id="lg"><option value="en">English</option><option value="fr">Français</option><option value="es">Español</option></select></label>
+        <label for="rm"><input type="checkbox" id="rm" checked> Remember me</label><button type="submit" class="btn primary">Log in</button><p class="hint">Use a made-up name. Nothing leaves this page.</p></form>`}</div>`
+      :`<div class="shop-body"><h3>Browser closed</h3><p>The website session has ended.</p></div>`};
+  draw();
+  r.addEventListener('click',e=>{const add=e.target.closest('[data-add]');
+    if(add){L.basket.push(add.dataset.add);hit('basket');log('A session cookie in RAM now holds the basket. It has no expiry date.');draw();return}
+    const f=e.target.closest('.flip');if(f){f.setAttribute('aria-pressed',f.getAttribute('aria-pressed')!=='true');return}
+    const id=e.target.id;
+    if(id==='power'){if(L.open){const had=L.basket.length||L.viaSession;const c=$('#ram .ck',r);L.open=false;hit('close');
+        log(had?'Browser closed. The session cookie in RAM is deleted, so the basket is lost.'+(L.persist?' The persistent cookie stays on the hard drive.':''):'Browser closed. There was no session cookie to delete.');
+        if(c&&!RM){c.classList.add('crumble');setTimeout(()=>{L.basket=[];L.logged=null;L.viaSession=false;draw()},700);$('#power',r).disabled=true}else{L.basket=[];L.logged=null;L.viaSession=false;draw()}}
+      else{L.open=true;hit('reopen');if(L.persist){L.logged=L.persist.name;L.lang=L.persist.lang;log('The website read the persistent cookie. It recognises '+L.persist.name+' and uses the saved language. The basket is empty because the session cookie was deleted.')}
+        else{L.lang='en';log('No persistent cookie was found, so the website does not recognise this user. They must log in again.')}draw()}}
+    if(id==='ff'&&L.persist){L.persist=null;hit('gone');log('The expiry date has passed, so the persistent cookie is deleted. Next visit, the site will not recognise this user.');draw()}
+    if(id==='del'&&L.persist){L.persist=null;hit('gone');log('The user deleted the persistent cookie. Next visit, the site will not recognise this user.');draw()}});
+  r.addEventListener('submit',e=>{if(e.target.id!=='lf')return;e.preventDefault();const nm=($('#nm',r).value.trim()||'Sam'),lg=$('#lg',r).value,rm=$('#rm',r).checked;
+    L.logged=nm;L.lang=lg;L.viaSession=true;if(rm){L.persist={name:nm,lang:lg};hit('login');log('Logged in. A persistent cookie with an expiry date is saved on the hard drive. The session cookie records that you are logged in now.')}
+    else log('Logged in without "Remember me". Only the session cookie knows. Close the browser and the login is forgotten.');draw()});
+  qcInit(r,p.id,QC.cookies)}};
+
+/* ---------- quick-check questions ---------- */
+const QC={
+'internet-www':[
+ {q:'Which statement describes the internet?',o:['A collection of websites and web pages','The infrastructure: a worldwide collection of interconnected networks','Software used to display web pages'],a:1,why:'Yes. The internet is the infrastructure.',no:'That describes something that uses the internet.'},
+ {q:'A student sends an email. Which statement is true?',o:['The email uses the internet, but email is not part of the World Wide Web','The email is part of the World Wide Web','The email does not use the internet'],a:0,why:'Yes. Email travels over the internet, but it is not the web.'},
+ {q:'Which of these belongs to the World Wide Web?',o:['TCP and IP','Cables and routers','URLs that give the location of web pages'],a:2,why:'Yes. URLs, HTTP and web pages belong to the web.'}],
+url:[
+ {q:'What is a URL?',o:['A set of rules for sending data','A text-based address for a web page','A number that identifies a device'],a:1,why:'Yes. A URL is a text-based address for a web page.',no:'Not quite. Think "address you can read".'},
+ {q:'In https://www.quizcorner.org/maths/fractions.html, what is the domain name?',o:['https','www.quizcorner.org','/maths/fractions.html'],a:1,why:'Yes. It comes after :// and before the first single slash.'},
+ {q:'Why do people use URLs and not IP addresses?',o:['URLs are encrypted','URLs are faster to send','Text is easier for people to remember'],a:2,why:'Yes. The DNS then turns the domain name into the IP address.'}],
+http:[
+ {q:'What is a protocol?',o:['A set of rules for communication between devices','A type of web browser','A small text file'],a:0,why:'Yes. HTTP and HTTPS are both protocols.'},
+ {q:'What is the difference between HTTP and HTTPS?',o:['HTTPS is used for images only','HTTPS encrypts the data being transmitted','HTTPS does not need a web server'],a:1,why:'Yes. HTTPS is HTTP with encryption added.'},
+ {q:'Which activity needs HTTPS the most?',o:['Reading a recipe','Entering bank card details','Viewing a public map'],a:1,why:'Yes. Payment details are sensitive data.'}],
+browser:[
+ {q:'What is the main purpose of a web browser?',o:['To store websites','To find IP addresses','To render HTML and display web pages'],a:2,why:'Yes. That is the wording the syllabus uses.',no:'That is the job of a different part of the system.'},
+ {q:'Which of these is a function of a web browser?',o:['Storing bookmarks and favourites','Translating domain names into IP addresses','Hosting web pages for a website'],a:0,why:'Yes. The other two are the DNS and the web server.'},
+ {q:'What does "recording user history" let the user do?',o:['Encrypt their data','Open two pages at once','Go back to pages they viewed before'],a:2,why:'Yes. History is a list of pages already visited.'}],
+journey:[
+ {q:'What is the role of the DNS?',o:['It stores the web pages','It finds the IP address that matches the domain name','It renders the HTML'],a:1,why:'Yes. Domain name in, IP address out.',no:'No. Think of the phone book.'},
+ {q:'What does the browser do after it receives the IP address?',o:['Sends a request to the web server at that IP address','Sends the IP address back to the DNS','Displays the page straight away'],a:0,why:'Yes. It now knows where the web server is.'},
+ {q:'What does the web server send back, and what happens to it?',o:['A cookie, which the DNS stores','A URL, which the user types','HTML, which the browser renders to display the page'],a:2,why:'Yes. The browser renders the HTML.'}],
+cookies:[
+ {q:'What is a cookie?',o:['A program that encrypts web pages','A small text file sent by a web server and stored by the web browser','The address of a web page'],a:1,why:'Yes. Sent by the web server, stored by the browser.'},
+ {q:'Where is a session cookie stored, and when is it deleted?',o:['In memory (RAM); when the browser is closed','On the hard drive; when it expires','On the web server; never'],a:0,why:'Yes. Temporary memory, gone when the browser closes.',no:'No. Think about what happened when you closed the browser in the lab.'},
+ {q:'When is a persistent cookie deleted?',o:['When the browser is closed','When the page is refreshed','When its expiry date is reached or the user deletes it'],a:2,why:'Yes. Until then it stays on the hard drive.'}]
+};
+
+/* ---------- exam practice ---------- */
+const OBJ=TEACH.map(p=>p.id);
+const EQ=[
+ {id:'e1',type:'tap',o:'url',cmd:'Identify',m:3,q:'A student types this URL into a browser. Identify each part when asked.'},
+ {id:'e2',type:'tick',o:'internet-www',cmd:'Identify',m:5,q:'Choose whether each statement describes the internet or the World Wide Web.',rows:[['Makes use of TCP and IP','i'],['Uses URLs to specify the location of web pages','w'],['It is possible to send and receive emails','i'],['Resources are accessed using web browsers','w'],['Is a worldwide collection of interconnected networks','i']]},
+ {id:'e3',type:'gap',o:'cookies',cmd:'Complete',m:5,q:'Complete the paragraph. Choose from the list. Not every term is used.',bank:['HTML','IP address','persistent','session','text','URL','web browser','web server'],
+   text:['Cookies are small ',' files. A cookie is sent by a ',' and stored by a ','. ',' cookies are held in memory and are deleted when the browser is closed. ',' cookies are saved on the hard drive until they expire or the user deletes them.'],ans:['text','web server','web browser','session','persistent']},
+ {id:'e4',type:'match',o:'journey',cmd:'Match',m:5,q:'Match each term to its description.',pairs:[{a:'URL',b:'A text-based address for a web page'},{a:'Cookie',b:'A small text file stored by the web browser'},{a:'Web server',b:'Stores web pages and sends them to browsers'},{a:'HTML',b:'The language used to create a web page'},{a:'World Wide Web',b:'The collection of all websites and web pages'}]},
+ {id:'e5',type:'mcq',o:'journey',cmd:'Identify',m:1,q:'Identify the part of the system that finds the IP address for a domain name.',opts:['Web browser','Domain name server (DNS)','Web server','Cookie'],a:1},
+ {id:'e6',type:'written',o:'browser',cmd:'State',m:1,q:'State the purpose of a web browser.',ms:['To render HTML / to display web pages']},
+ {id:'e7',type:'written',o:'browser',cmd:'Give',m:3,q:'Storing cookies is one function of a web browser. Give three other functions of a web browser.',ms:['Storing bookmarks / favourites','Recording user history','Allowing use of multiple tabs','Providing navigation tools (back, forward, home)','Providing an address bar']},
+ {id:'e8',type:'written',o:'url',cmd:'Describe',m:2,q:'Describe what is meant by a uniform resource locator (URL).',ms:['It is a text-based address','It is the address of a web page / website','It can contain the protocol, the domain name and the web page / file name']},
+ {id:'e9',type:'written',o:'http',cmd:'Describe',m:2,q:'Describe one difference between HTTP and HTTPS.',ms:['HTTPS encrypts the data being transmitted','HTTP sends data that is not encrypted / data can be understood if intercepted','HTTPS is the secure version / uses SSL or TLS']},
+ {id:'e10',type:'written',o:'http',cmd:'Explain',m:4,q:'Explain the differences between HTTP and HTTPS. Include an example of when HTTPS would be preferred.',ms:['Both are protocols used to transfer web pages between a browser and a web server','HTTPS encrypts the data being transmitted','HTTP does not encrypt the data, so it can be understood if intercepted','HTTPS uses SSL / TLS','Suitable example: online banking / paying online / logging in','…because sensitive or personal data is being sent']},
+ {id:'e11',type:'written',o:'cookies',cmd:'Give',m:2,q:'Give two uses of cookies.',ms:['Saving personal details','Tracking user preferences','Holding items in an online shopping cart','Storing login details']},
+ {id:'e12',type:'written',o:'cookies',cmd:'Explain',m:4,q:'A student visits a website that uses session cookies and not persistent cookies. Explain the difference between session cookies and persistent cookies.',ms:['Session cookies are stored in memory / RAM','Persistent cookies are stored on the hard drive / secondary storage','Session cookies are deleted when the browser is closed / the session ends','Persistent cookies stay until they expire / the user deletes them','Suitable use of each, e.g. session: shopping basket; persistent: login details']},
+ {id:'e13',type:'written',o:'journey',cmd:'Explain',m:7,q:'A shop sells products on its website. Explain how a web page from the shop is requested by a customer, sent to the customer\'s computer and displayed on the screen.',ms:['A web browser is used','The user enters the URL into the address bar / clicks a link','The URL contains the domain name','The browser sends the domain name to the DNS','The DNS holds a database of domain names and IP addresses','The DNS finds the IP address and returns it to the browser','The browser sends a request to the web server / to that IP address (using HTTP or HTTPS)','The web server stores the web pages and sends the data (HTML) back to the browser','The browser renders / interprets the HTML to display the page']}
+];
+const TOTAL=EQ.reduce((s,q)=>s+q.m,0);
+V.exam={html(){return `<header class="phead"><p class="stop">Paper 1 practice · ${EQ.length} questions · ${TOTAL} marks</p><h1>Exam practice</h1><p class="big">These questions copy the styles used in real papers. Some mark themselves. For written answers, type your answer first, then reveal the marking points and tick the ones you made.</p></header>
+<section class="card score" id="score" aria-live="polite"></section>
+<section class="card"><h2>Command word decoder</h2><div class="tw"><table><tbody>
+ <tr><th>State / Give</th><td>Write a short fact. No explanation needed. One fact per mark.</td></tr>
+ <tr><th>Identify</th><td>Pick out or name the right thing.</td></tr>
+ <tr><th>Describe</th><td>Say what it is or what happens, step by step.</td></tr>
+ <tr><th>Explain</th><td>Say what happens <em>and why</em>. Use "because" or "so that".</td></tr></tbody></table></div></section>
+${EQ.map((q,n)=>`<section class="card q" id="${q.id}"><div class="qh"><div class="l"><span class="pill">${q.cmd}</span><h3>Question ${n+1}</h3></div><span class="marks">[${q.m} mark${q.m>1?'s':''}] <span data-got></span></span></div><p>${q.q}</p><div data-body></div></section>`).join('')}
+<section class="card"><h2>One-page summary</h2><div id="sum"></div><div class="row"><button type="button" class="btn" id="copy">Copy summary</button><span class="fb" id="copyFb" aria-live="polite"></span></div></section>
+<nav class="pn"><a class="btn" href="#cookies">← Cookies</a><a class="btn" href="#home">Back to start</a></nav>`},
+init(r){
+  const set=(q,v)=>{store.exam[q.id]=Math.max(0,Math.min(q.m,v));save();score();const g=$(`#${q.id} [data-got]`,r);g.textContent='· you scored '+store.exam[q.id];};
+  const score=()=>{const got=EQ.reduce((s,q)=>s+(store.exam[q.id]||0),0),done=EQ.filter(q=>q.id in store.exam).length;
+    const per=TEACH.map(p=>{const qs=EQ.filter(q=>q.o===p.id),att=qs.filter(q=>q.id in store.exam);return {p,g:qs.reduce((s,q)=>s+(store.exam[q.id]||0),0),t:qs.reduce((s,q)=>s+q.m,0),att:att.length,n:qs.length}});
+    const weak=per.filter(x=>x.att===x.n&&x.g<x.t).sort((a,b)=>a.g/a.t-b.g/b.t)[0];
+    $('#score',r).innerHTML=`<div class="qh"><h2>${got} / ${TOTAL} marks</h2><span class="marks">${done} of ${EQ.length} questions answered</span></div>
+     <div class="bars">${per.map(x=>`<div class="bar-row"><a href="#${x.p.id}">${x.p.label}</a><span class="track"><i style="width:${x.t?x.g/x.t*100:0}%"></i></span><span>${x.g}/${x.t}</span></div>`).join('')}</div>
+     ${weak?`<p>Weakest area so far: <a href="#${weak.p.id}">${weak.p.title}</a>. Go back to that stop, then try its questions again.</p>`:done===EQ.length?'<p class="complete">Full marks in every area. You are ready for this topic.</p>':''}`};
+  score();
+  EQ.forEach(q=>{const sec=$('#'+q.id,r),body=$('[data-body]',sec);if(q.id in store.exam)$('[data-got]',sec).textContent='· you scored '+store.exam[q.id];
+    if(q.type==='tap'){const u=['https','www.oakmuseum.net','/visit/tickets.html'];urlTap(body,[{u,ask:'domain'},{u,ask:'file'},{u,ask:'protocol'}],f=>set(q,f))}
+    if(q.type==='match')matcher(body,q.pairs,f=>set(q,f));
+    if(q.type==='mcq'){body.innerHTML=`<div class="qc"><fieldset>${q.opts.map((o,j)=>`<button type="button" class="opt" data-o="${j}">${o}</button>`).join('')}<p class="fb" aria-live="polite"></p></fieldset></div>`;
+      body.addEventListener('click',e=>{const b=e.target.closest('.opt');if(!b)return;$$('.opt',body).forEach(x=>x.disabled=true);const ok=+b.dataset.o===q.a;b.classList.add(ok?'right':'wrong');if(!ok)$$('.opt',body)[q.a].classList.add('right');set(q,ok?1:0)})}
+    if(q.type==='tick'){body.innerHTML=`<div class="tw tick"><table><thead><tr><th>Statement</th><th>Internet or World Wide Web?</th></tr></thead><tbody>${q.rows.map((row,k)=>`<tr><td><label for="${q.id}-${k}">${row[0]}</label></td><td><select id="${q.id}-${k}"><option value="">Choose…</option><option value="i">Internet</option><option value="w">World Wide Web</option></select> <span class="fb"></span></td></tr>`).join('')}</tbody></table></div><div class="row"><button type="button" class="btn primary">Check answers</button></div>`;
+      $('.btn',body).addEventListener('click',()=>{let n=0;q.rows.forEach((row,k)=>{const s=$(`#${q.id}-${k}`,body),ok=s.value===row[1];if(ok)n++;const f=s.nextElementSibling;f.className='fb '+(ok?'ok':'no');f.textContent=ok?'✓':'✗ '+(row[1]==='i'?'Internet':'World Wide Web')});set(q,n)})}
+    if(q.type==='gap'){const sel=k=>`<label class="sr" for="${q.id}-${k}">Gap ${k+1}</label><select id="${q.id}-${k}"><option value="">(${k+1}) choose…</option>${q.bank.map(b=>`<option>${b}</option>`).join('')}</select>`;
+      body.innerHTML=`<div class="gap"><p class="hint">Word list: ${q.bank.join(' · ')}</p><p>${q.text.map((t,k)=>t+(k<q.ans.length?sel(k):'')).join('')}</p></div><div class="row"><button type="button" class="btn primary">Check answers</button><span class="fb" aria-live="polite"></span></div>`;
+      $('.btn',body).addEventListener('click',()=>{let n=0;q.ans.forEach((a,k)=>{const s=$(`#${q.id}-${k}`,body),ok=s.value===a;if(ok)n++;s.style.borderColor=ok?'var(--good)':'var(--bad)'});const f=$('.row .fb',body);f.className='fb '+(n===5?'ok':'no');f.textContent=n===5?'All five correct.':n+' of 5 correct. Answers: '+q.ans.join(', ')+'.';set(q,n)})}
+    if(q.type==='written'){body.innerHTML=`<label class="sr" for="${q.id}-t">Your answer</label><textarea id="${q.id}-t" placeholder="Type your answer here before you look at the marking points."></textarea><div class="row"><button type="button" class="btn primary">Reveal the marking points</button></div><div class="ms" hidden><strong>Award 1 mark for each point you made, up to ${q.m}.</strong>${q.ms.map((m,k)=>`<label for="${q.id}-m${k}"><input type="checkbox" id="${q.id}-m${k}"> <span>${m}</span></label>`).join('')}</div>`;
+      $('.btn',body).addEventListener('click',e=>{$('.ms',body).hidden=false;e.target.disabled=true;set(q,0)});
+      $('.ms',body).addEventListener('change',()=>set(q,$$('.ms input:checked',body).length))}
+  });
+  const SUM=[['Internet vs WWW','The internet is the infrastructure: a worldwide collection of interconnected networks. The World Wide Web is the collection of websites and web pages accessed using the internet.'],
+   ['URL','A text-based address for a web page. It can contain the protocol, the domain name and the web page / file name.'],
+   ['HTTP and HTTPS','Protocols (sets of rules) for transferring web pages between a browser and a web server. HTTPS is secure: data is encrypted, using SSL or TLS.'],
+   ['Web browser','Purpose: render HTML and display web pages. Functions: bookmarks and favourites, user history, multiple tabs, cookies, navigation tools, address bar.'],
+   ['Page journey','User enters URL. Browser sends domain name to DNS. DNS finds the IP address and returns it. Browser sends a request to the web server at that IP address. Web server sends HTML. Browser renders the HTML and displays the page.'],
+   ['Cookies','Small text files sent by a web server and stored by the browser. Session: in RAM, deleted when the browser closes. Persistent: on the hard drive until expiry or deleted by the user. Uses: personal details, user preferences, shopping cart items, login details.']];
+  $('#sum',r).innerHTML=`<div class="tw"><table><tbody>${SUM.map(s=>`<tr><th>${s[0]}</th><td>${s[1]}</td></tr>`).join('')}</tbody></table></div>`;
+  $('#copy',r).addEventListener('click',()=>{const t=SUM.map(s=>s[0].toUpperCase()+'\n'+s[1]).join('\n\n'),f=$('#copyFb',r);
+    try{navigator.clipboard.writeText(t).then(()=>{f.className='fb ok';f.textContent='Copied. Paste it into your notes.'},()=>{f.className='fb no';f.textContent='Copy was blocked. Select the table text and copy it by hand.'})}catch(e){f.className='fb no';f.textContent='Copy was blocked. Select the table text and copy it by hand.'}})}};
+
+/* ---------- shell ---------- */
+function drawRoute(){const cur=(location.hash.replace('#','')||'home');
+  $('#route').innerHTML=PAGES.map((p,n)=>`<a href="#${p.id}" class="${store.done[p.id]?'done':''}" ${p.id===cur?'aria-current="page"':''}><i>${store.done[p.id]?'✓':n===0?'●':n===7?'★':n}</i>${p.label}</a>`).join('');
+  const c=$('#route [aria-current]');if(c&&c.scrollIntoView)c.scrollIntoView({block:'nearest',inline:'center'})}
+function render(){if(cleanup){cleanup();cleanup=null}
+  let id=location.hash.replace('#','')||'home';let p=PAGES.find(x=>x.id===id);if(!p){p=PAGES[0];id='home'}
+  const app=$('#app');app.innerHTML=V[id].html(p);V[id].init(app,p);drawRoute();window.scrollTo(0,0)}
+addEventListener('hashchange',render);
+$('#theme').addEventListener('click',()=>{const el=document.documentElement,now=el.dataset.theme||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');el.dataset.theme=now==='dark'?'light':'dark'});
+render();
+})();
+</script>
+</body>
+</html>
